@@ -123,7 +123,7 @@ int last_uread(FILE *fp, struct utmp *u, int *quit)
         if (fseeko(fp, -2 * sizeof(struct utmp), SEEK_CUR) < 0)
             if (quit)
                 *quit = 1;
-        if (ftell(fp) == 0 && quit)
+        if ((ftell(fp) == 0) && quit) 
             *quit = 1;
     }
     return r;
@@ -312,7 +312,8 @@ int last_read_wtmp(int idx, char *search)
                         /* show it */
                         if (c == 0) 
                         {
-                            quit = last_display(idx, &ut, p->ut.ut_time, R_NORMAL, search);
+                            x = last_display(idx, &ut, p->ut.ut_time, R_NORMAL, search);
+                            quit |= x;
                             c = 1;
                         }
                         if (p->next) 
@@ -339,7 +340,9 @@ int last_read_wtmp(int idx, char *search)
                     }
                     else 
                         c = whydown;
-                    quit = last_display(idx, &ut, lastboot, c, search);
+
+                    x = last_display(idx, &ut, lastboot, c, search);
+                    quit |= x;
                 }
                 /* no break here! */
             case DEAD_PROCESS:
