@@ -89,26 +89,29 @@ struct utmplist *utmplist = NULL;
 int last_init_wtmp()
 {
   FILE *fp;
-  if ((fp = fopen(last_wtmp_file, "r")) == NULL && errno == ENOENT) {
-    /* not existsing -> first load or file removed 
-     *  => initialize it with size 0 */
-    if ((fp = fopen(last_wtmp_file, "w")) == NULL) {
+  if ((fp = fopen(last_wtmp_file, "r")) == NULL) {
+    if (errno == ENOENT) {
+      /* not existsing -> first load or file removed 
+       *  => initialize it with size 0 */
+      if ((fp = fopen(last_wtmp_file, "w")) == NULL) {
+        putlog(LOG_MISC, "*", 
+                "%s.mod: failed to initialize wtmp file `%s': %s'", 
+                  MODULE_NAME,
+                  last_wtmp_file, 
+                  strerror(errno)
+              );
+        return 0;
+      }
+    }
+    else {
       putlog(LOG_MISC, "*", "%s.mod: failed to initialize wtmp file `%s': %s'", 
                 MODULE_NAME,
                 last_wtmp_file, 
                 strerror(errno)
-            );
-      return 0;
+          );
+      return 0; 
     }
   } 
-  else {
-    putlog(LOG_MISC, "*", "%s.mod: failed to initialize wtmp file `%s': %s'", 
-                MODULE_NAME,
-                last_wtmp_file, 
-                strerror(errno)
-          );
-    return 0; 
-  }
   fclose(fp);
   return 1;
 }
@@ -148,7 +151,7 @@ static int last_write_wtmp(int idx, int login)
   return 0;
 }
 
-int last_uread(FILE *fp, struct utmp *u, int *quit, int *been_here)
+int last_uread(FILE *fp, struct utmp *u, int *quit)
 {
   off_t r;
   if (u == NULL) {
@@ -159,19 +162,9 @@ int last_uread(FILE *fp, struct utmp *u, int *quit, int *been_here)
 
   r = fread(u, sizeof(struct utmp), 1, fp);
   if (r == 1) {
-    if (fseeko(fp, -2 * sizeof(struct utmp), SEEK_CUR) < 0) {
+    if (fseek(fp, -2 * sizeof(struct utmp), SEEK_CUR) < 0) {
       if (quit)
         *quit = 1;
-    }
-    else { /* seek was ok */
-      if ((ftell(fp) == 0) && quit) {
-        /* were back at beginning of file, stop reading... 
-         * else, we'd read the first entry inifinite times? */
-        if (*been_here)
-          *quit = 1;
-        else
-          *been_here++;
-      }
     }
   }
   return r;
@@ -295,7 +288,6 @@ int last_read_wtmp(int idx, char *search)
   int c, x;         /* Scratch */
   int quit = 0;     /* Flag */
   int down = 0;     /* Down flag */
-  int at_first = 0; /* we've been at beginnin of wtmp file this many times */
 
   time_t until = 0; /* at what time to stop parsing the file */
 
@@ -312,7 +304,7 @@ int last_read_wtmp(int idx, char *search)
           "HANDLE    IDX          WHEN                                  HOST\n"
          ); 
 
-  if (last_uread(fp, &ut, NULL, &at_first) == 1) 
+  if (last_uread(fp, &ut, NULL) == 1) 
     last_rec_begin = ut.ut_time;
   else {
     fstat(fileno(fp), &st);
@@ -324,14 +316,14 @@ int last_read_wtmp(int idx, char *search)
    * Go to end of file minus one structure
    * and/or initialize utmp reading code.
    */
-  last_uread(fp, NULL, NULL, &at_first);
+  last_uread(fp, NULL, NULL);
 
   /*
    * Read struct after struct backwards from the file.
    */
   while (!quit) {
 
-    if (last_uread(fp, &ut, &quit, &at_first) != 1)
+    if (last_uread(fp, &ut, &quit) != 1)
       break;
 
     // if (until && until < ut.ut_time) 
@@ -339,6 +331,7 @@ int last_read_wtmp(int idx, char *search)
         
     if (memcmp(&ut, &oldut, sizeof(struct utmp)) == 0) 
       continue;
+    
     memcpy(&oldut, &ut, sizeof(struct utmp));
 
     lastdate = ut.ut_time;
@@ -356,7 +349,7 @@ int last_read_wtmp(int idx, char *search)
         break;
       case BOOT_TIME:
         strcpy(ut.ut_line, "system boot");
-        quit = last_display(idx, &ut, lastdown, R_REBOOT, search);
+        quit |= last_display(idx, &ut, lastdown, R_REBOOT, search);
         down = 1;
         break;
       case USER_PROCESS:
@@ -366,8 +359,7 @@ int last_read_wtmp(int idx, char *search)
           if (strncmp(p->ut.ut_line, ut.ut_line, UT_LINESIZE) == 0) {
             /* show it */
             if (c == 0) {
-              x = last_display(idx, &ut, p->ut.ut_time, R_NORMAL, search);
-              quit |= x;
+              quit |= last_display(idx, &ut, p->ut.ut_time, R_NORMAL, search);
               c = 1;
             }
             if (p->next) 
@@ -393,8 +385,7 @@ int last_read_wtmp(int idx, char *search)
           else 
             c = whydown;
           
-          x = last_display(idx, &ut, lastboot, c, search);
-          quit |= x;
+          quit |= last_display(idx, &ut, lastboot, c, search);
         }
         /* no break here! */
       case DEAD_PROCESS:
