@@ -29,6 +29,15 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
+/*
+ * TODO:
+ *  - fix missing first entry of wtmp file
+ *  - time changes? i.e. CET -> CEST -> CET
+ *  - search with wildcards? i.e. '.last Veti*'
+ *  - IPv6 
+ *  -
+ */
+
 #define MODULE_NAME "last"
 #define LAST_MOD_MAJOR_VERSION 0
 #define LAST_MOD_MINOR_VERSION 1
@@ -68,6 +77,7 @@ static char last_wtmp_file[121] = "Eggdrop.last";
 static int last_max_lines       = 20;
 static int last_recs_done       = 0;
 time_t lastdate;    /* Last date we've seen */
+
 /* Double linked list of struct utmp's */
 struct utmplist {
   struct utmp ut;
@@ -78,471 +88,465 @@ struct utmplist *utmplist = NULL;
 
 int last_init_wtmp()
 {
-    FILE *fp;
-    if ((fp = fopen(last_wtmp_file, "r")) == NULL && errno == ENOENT) 
-    {
-        if ((fp = fopen(last_wtmp_file, "w")) == NULL)
-        {
-            putlog(LOG_MISC, "*", 
-                "%s.mod: failed to initialize wtmp file `%s': %s'", 
+  FILE *fp;
+  if ((fp = fopen(last_wtmp_file, "r")) == NULL && errno == ENOENT) {
+    if ((fp = fopen(last_wtmp_file, "w")) == NULL) {
+      putlog(LOG_MISC, "*", "%s.mod: failed to initialize wtmp file `%s': %s'", 
                 MODULE_NAME,
                 last_wtmp_file, 
                 strerror(errno)
             );
-            return 0;
-        }
-    } 
-    fclose(fp);
-    return 1;
+      return 0;
+    }
+  } 
+  else 
+    return 0; 
+
+  fclose(fp);
+  return 1;
 }
 
 static int last_write_wtmp(int idx, int login)
 {
-    struct utmp entry;
-    char temp[512];
+  struct utmp entry;
+  char temp[512];
 
-    entry.ut_pid  = idx; /* this is unique, so we can use it as PID */
-    /* for future use, record the ip */
-    entry.ut_addr = dcc[idx].addr ? dcc[idx].addr : 0;
-    entry.ut_time = time(NULL);
+  entry.ut_pid  = idx; /* this is unique, so we can use it as PID */
 
-    /* NICKLEN is usually less than UT_NAMESIZE, but... */
-    strncpy(entry.ut_user, dcc[idx].nick, UT_NAMESIZE);
+  /* FIXME, this is IPv4 ONLY */
+  entry.ut_addr = dcc[idx].addr ? dcc[idx].addr : 0; 
 
-    snprintf(temp, UT_HOSTSIZE, "%s", dcc[idx].host);
-    strcpy(entry.ut_host, temp);
+  entry.ut_time = time(NULL);
 
-    snprintf(temp, 4, "%d", idx);
-    strcpy(entry.ut_id,   temp);
+  /* NICKLEN is usually less than UT_NAMESIZE, but... */
+  strncpy(entry.ut_user, dcc[idx].nick, UT_NAMESIZE);
 
-    snprintf(temp, UT_LINESIZE, "idx%d", idx);
-    strcpy(entry.ut_line, temp);
+  snprintf(temp, UT_HOSTSIZE, "%s", dcc[idx].host);
+  strcpy(entry.ut_host, temp);
 
-    if (login) 
-        entry.ut_type = USER_PROCESS;
-    else
-        entry.ut_type = DEAD_PROCESS;
+  snprintf(temp, 4, "%d", idx);
+  strcpy(entry.ut_id, temp);
 
-    if (last_init_wtmp() == 0) 
-        return 1;
-    updwtmp((const char *)last_wtmp_file, &entry);
-    return 0;
+  snprintf(temp, UT_LINESIZE, "idx%d", idx);
+  strcpy(entry.ut_line, temp);
+
+  if (login) 
+    entry.ut_type = USER_PROCESS;
+  else
+    entry.ut_type = DEAD_PROCESS;
+
+  if (last_init_wtmp() == 0) 
+    return 1;
+  updwtmp((const char *)last_wtmp_file, &entry);
+  return 0;
 }
 
 int last_uread(FILE *fp, struct utmp *u, int *quit)
 {
-    off_t r;
-    if (u == NULL) 
-    {
-        r = sizeof(struct utmp);
-        fseek(fp, -1 * r, SEEK_END);
-        return 1;
-    }
+  off_t r;
+  if (u == NULL) {
+    r = sizeof(struct utmp);
+    fseek(fp, -1 * r, SEEK_END);
+    return 1;
+  }
 
-    r = fread(u, sizeof(struct utmp), 1, fp);
-    if (r == 1)
-    {
-        if (fseeko(fp, -2 * sizeof(struct utmp), SEEK_CUR) < 0)
-        {
-            if (quit)
-                *quit = 1;
-        }
-        if ((ftell(fp) == 0) && quit) 
-            *quit = 1;
+  r = fread(u, sizeof(struct utmp), 1, fp);
+  if (r == 1) {
+    if (fseeko(fp, -2 * sizeof(struct utmp), SEEK_CUR) < 0) {
+      if (quit)
+        *quit = 1;
     }
-    return r;
+    else { /* seek was ok */
+      if ((ftell(fp) == 0) && quit) {
+        /* were back at beginning of file, stop reading... 
+         * else, we'd read the first entry inifinite times? */
+        *quit = 1;
+      }
+    }
+  }
+  return r;
 }
 
 int last_display(int idx, struct utmp *p, time_t t, int what, char *search)
 {
-    time_t      secs, tmp;
-    char        logintime[32];
-    char        logouttime[32];
-    char        length[32];
-    char        final[128];
-    char        utline[UT_LINESIZE+1];
-    char        domain[256];
-    char        *s, *walk;
-    int         my_mins, my_hours, my_days;
-    // int         r, len;
+  time_t      secs, tmp;
+  char        logintime[32];
+  char        logouttime[32];
+  char        length[32];
+  char        final[128];
+  char        utline[UT_LINESIZE+1];
+  char        domain[256];
+  char        *s, *walk;
+  int         my_mins, my_hours, my_days;
+  // int         r, len;
  
-    utline[0] = 0;
-    strncat(utline, p->ut_line, UT_LINESIZE);
+  utline[0] = 0;
+  strncat(utline, p->ut_line, UT_LINESIZE);
 
-    if (search[0] != 0) {
-        for (walk = search; walk[0] != 0; walk++) {
-            if (strncasecmp(p->ut_name, walk, UT_NAMESIZE) == 0 ||
-                strcmp(utline, walk) == 0 ||
-                (strncmp(utline, "idx", 3) == 0 &&
-                 strcmp(utline + 3, walk) == 0) ||
-                 strncmp(p->ut_host, walk, UT_HOSTSIZE) == 0
-               ) break;
-        }
-        if (walk[0] == 0) return 0;
+  if (search[0] != 0) {
+    for (walk = search; walk[0] != 0; walk++) {
+      if (strncasecmp(p->ut_name, walk, UT_NAMESIZE) == 0 ||
+          strcmp(utline, walk) == 0 ||
+          (strncmp(utline, "idx", 3) == 0 &&
+           strcmp(utline + 3, walk) == 0) ||
+           strncmp(p->ut_host, walk, UT_HOSTSIZE) == 0
+         ) break;
     }
-    /*
-     *  Calculate times
-     */
-    tmp = (time_t)p->ut_time;
-    strcpy(logintime, ctime(&tmp));
-    logintime[16] = 0;
-    sprintf(logouttime, "- %s", ctime(&t) + 11);
-    logouttime[7] = 0;
-    secs = t - p->ut_time;
-    my_mins  = (secs / 60) % 60;
-    my_hours = (secs / 3600) % 24;
-    my_days  = (secs / 86400) % 86400;
-    if (my_days)
-        sprintf(length, "(%d+%02d:%02d)", my_days, my_hours, my_mins);
-    else
-        sprintf(length, " (%02d:%02d)", my_hours, my_mins);
+    if (walk[0] == 0) 
+      return 0;
+  }
 
-    switch (what) {
-        case R_CRASH:
-            sprintf(logouttime, "- crash");
-            break;
-        case R_DOWN:
-            sprintf(logouttime, "- down ");
-            break;
-        case R_NOW:
-            length[0] = 0;
-            sprintf(logouttime, "  still");
-            sprintf(length, "logged in");
-            break;
-        case R_PHANTOM:
-            length[0] = 0;
-            sprintf(logouttime, "   gone");
-            sprintf(length, "- no logout");
-            break;
-        case R_REBOOT:
-            logouttime[0] = 0;      /* Print machine uptime */
-            break;
-        case R_TIMECHANGE:
-            logouttime[0] = 0;
-            length[0] = 0;
-            break;
-        case R_NORMAL:
-            break;
-    }
+  /*
+   *  Calculate times
+   */
+  tmp = (time_t)p->ut_time;
+  strcpy(logintime, ctime(&tmp));
+  logintime[16] = 0;
+  sprintf(logouttime, "- %s", ctime(&t) + 11);
+  logouttime[7] = 0;
+  secs = t - p->ut_time;
+  my_mins  = (secs / 60) % 60;
+  my_hours = (secs / 3600) % 24;
+  my_days  = (secs / 86400) % 86400;
+  if (my_days)
+      sprintf(length, "(%d+%02d:%02d)", my_days, my_hours, my_mins);
+  else
+      sprintf(length, " (%02d:%02d)", my_hours, my_mins);
+
+  switch (what) {
+      case R_CRASH:
+          sprintf(logouttime, "- crash");
+          break;
+      case R_DOWN:
+          sprintf(logouttime, "- down ");
+          break;
+      case R_NOW:
+          length[0] = 0;
+          sprintf(logouttime, "  still");
+          sprintf(length, "logged in");
+          break;
+      case R_PHANTOM:
+          length[0] = 0;
+          sprintf(logouttime, "   gone");
+          sprintf(length, "- no logout");
+          break;
+      case R_REBOOT:
+          logouttime[0] = 0;      /* Print machine uptime */
+          break;
+      case R_TIMECHANGE:
+          logouttime[0] = 0;
+          length[0] = 0;
+          break;
+      case R_NORMAL:
+          break;
+  }
     
-    strncpy(domain, p->ut_host, UT_HOSTSIZE); 
-    snprintf(final, sizeof(final),
-                "%-9.9s %-12.12s %-16.16s %-7.7s %-12.12s %s",
-                p->ut_name, utline, 
-                logintime, logouttime, length, domain
-            );
-    for (s = final; *s; s++) 
-    {
-        if (*s < 32 || (unsigned char)*s > 126)
-            *s = '*';
-    }
-    dprintf(idx, "%s\n", final);
+  strncpy(domain, p->ut_host, UT_HOSTSIZE); 
+  snprintf(final, sizeof(final),
+              "%-9.9s %-12.12s %-16.16s %-7.7s %-12.12s %s",
+              p->ut_name, utline, 
+              logintime, logouttime, length, domain
+          );
 
-    last_recs_done++;
-    if (last_recs_done >= last_max_lines)
-        return 1;    
+  /* clean string of unprintable chars */
+  for (s = final; *s; s++) {
+    if (*s < 32 || (unsigned char)*s > 126)
+      *s = '*';
+  }
+  dprintf(idx, "%s\n", final);
 
-    return 0;
+  last_recs_done++;
+  if (last_recs_done >= last_max_lines)
+    return 1;    
+
+  return 0;
 }
 
 int last_read_wtmp(int idx, char *search)
 {
-    FILE   *fp; /* fh for wtmp file */
-    struct stat st;
-    time_t    last_rec_begin = 0;
+  FILE   *fp; /* fh for wtmp file */
+  struct stat st;
+  time_t    last_rec_begin = 0;
 
-    struct utmp ut;   /* Current utmp entry */
-    struct utmp oldut;    /* Old utmp entry to check for duplicates */
-    struct utmplist *p;   /* Pointer into utmplist */
-    struct utmplist *next;/* Pointer into utmplist */
+  struct utmp ut;   /* Current utmp entry */
+  struct utmp oldut;    /* Old utmp entry to check for duplicates */
+  struct utmplist *p;   /* Pointer into utmplist */
+  struct utmplist *next;/* Pointer into utmplist */
 
-    time_t lastboot = 0; // time(NULL);  /* Last boottime */
-    time_t lastrch  = 0;   /* Last run level change */
-    time_t lastdown = time(NULL);  /* Last downtime */
-    int whydown = 0;  /* Why we went down: crash or shutdown */
+  time_t lastboot = 0; // time(NULL);  /* Last boottime */
+  time_t lastrch  = 0;   /* Last run level change */
+  time_t lastdown = time(NULL);  /* Last downtime */
+  int whydown = 0;  /* Why we went down: crash or shutdown */
 
-    int c, x;     /* Scratch */
-    int quit = 0;     /* Flag */
-    int down = 0;     /* Down flag */
+  int c, x;     /* Scratch */
+  int quit = 0;     /* Flag */
+  int down = 0;     /* Down flag */
 
-    time_t until = 0; /* at what time to stop parsing the file */
+  time_t until = 0; /* at what time to stop parsing the file */
 
-    last_recs_done = 0;
-    if ((fp = fopen(last_wtmp_file, "r")) == NULL) 
-    {
-        dprintf(idx, "%s.mod: failed to open wtmp file: %s\n", 
-                    MODULE_NAME, strerror(errno)
-              );
-        return 0;
-    }
+  last_recs_done = 0;
+  if ((fp = fopen(last_wtmp_file, "r")) == NULL) {
 
-    if (last_uread(fp, &ut, NULL) == 1) 
-        last_rec_begin = ut.ut_time;
-    else 
-    {
-        fstat(fileno(fp), &st);
-        last_rec_begin = st.st_ctime;
-        quit      = 1;
-    }
+    putlog(LOG_MISC, "*", "%s.mod: failed to open wtmp file: %s\n",
+                MODULE_NAME, strerror(errno)
+           );
+    return 0;
+  }
 
-    /*
-     * Go to end of file minus one structure
-     * and/or initialize utmp reading code.
-     */
-    last_uread(fp, NULL, NULL);
+  dprintf(idx, 
+          "HANDLE    IDX          WHEN                                  HOST\n"
+         ); 
 
-    /*
-     * Read struct after struct backwards from the file.
-     */
-    while (!quit) 
-    {
-        if (last_uread(fp, &ut, &quit) != 1)
-            break;
+  if (last_uread(fp, &ut, NULL) == 1) 
+    last_rec_begin = ut.ut_time;
+  else {
+    fstat(fileno(fp), &st);
+    last_rec_begin = st.st_ctime;
+    quit = 1;
+  }
 
-        if (until && until < ut.ut_time) 
-            continue;
+  /*
+   * Go to end of file minus one structure
+   * and/or initialize utmp reading code.
+   */
+  last_uread(fp, NULL, NULL);
+
+  /*
+   * Read struct after struct backwards from the file.
+   */
+  while (!quit) {
+    if (last_uread(fp, &ut, &quit) != 1)
+      break;
+
+    // if (until && until < ut.ut_time) 
+    //   continue;
         
-        if (memcmp(&ut, &oldut, sizeof(struct utmp)) == 0) 
-            continue;
-        memcpy(&oldut, &ut, sizeof(struct utmp));
+    if (memcmp(&ut, &oldut, sizeof(struct utmp)) == 0) 
+      continue;
+    memcpy(&oldut, &ut, sizeof(struct utmp));
 
-        lastdate = ut.ut_time;
-        if (strncmp(ut.ut_line, "~", 1) == 0)
-        {
-            if (strncmp(ut.ut_user, "unload", 6) == 0)
-                ut.ut_type = SHUTDOWN_TIME;
-            else if (strncmp(ut.ut_user, "modload", 7) == 0)
-                ut.ut_type = BOOT_TIME;
-        }
+    lastdate = ut.ut_time;
+    if (strncmp(ut.ut_line, "~", 1) == 0) {
+      if (strncmp(ut.ut_user, "unload", 6) == 0)
+        ut.ut_type = SHUTDOWN_TIME;
+      else if (strncmp(ut.ut_user, "modload", 7) == 0)
+        ut.ut_type = BOOT_TIME;
+    }
         
-        switch (ut.ut_type) 
-        {
-            case SHUTDOWN_TIME:
-                lastdown = lastrch = ut.ut_time;
-                down = 1;
-                break;
-            case BOOT_TIME:
-                strcpy(ut.ut_line, "system boot");
-                quit = last_display(idx, &ut, lastdown, R_REBOOT, search);
-                down = 1;
-                break;
-            case USER_PROCESS:
-                c = 0;
-                for (p = utmplist; p; p = next) 
-                {
-                    next = p->next;
-                    if (strncmp(p->ut.ut_line, ut.ut_line, UT_LINESIZE) == 0) 
-                    {
-                        /* show it */
-                        if (c == 0) 
-                        {
-                            x = last_display(idx, &ut, p->ut.ut_time, R_NORMAL, search);
-                            quit |= x;
-                            c = 1;
-                        }
-                        if (p->next) 
-                            p->next->prev = p->prev;
-                        if (p->prev)
-                            p->prev->next = p->next;
-                        else
-                            utmplist = p->next;
-                        nfree(p);
-                    }
-                }
-                /* not found? -> crashed, down, still logged in or
-                 * logout missing:
-                 */
-                if (c == 0)
-                {
-                    if (lastboot == 0)
-                    {
-                        c = R_NOW;
-                        /* still alive? */
-                        if (dcc[ut.ut_pid].sock == -1) /* No */
-                            c = R_PHANTOM;
-
-                    }
-                    else 
-                        c = whydown;
-
-                    x = last_display(idx, &ut, lastboot, c, search);
-                    quit |= x;
-                }
-                /* no break here! */
-            case DEAD_PROCESS:
-                if (ut.ut_line[0] == 0)
-                    break;
-                if ((p = nmalloc(sizeof(struct utmplist))) == NULL) 
-                {
-                    putlog(LOG_DEBUG, "*", "%s.mod: out of memory!?", 
-                                      MODULE_NAME
-                          );
-                    quit = 1;
-                    return 1;
-                }
-                memcpy(&p->ut, &ut, sizeof(struct utmp));
-                p->next  = utmplist;
-                p->prev  = NULL;
-                if (utmplist) 
-                    utmplist->prev = p;
-                utmplist = p;
-                break;
-        }
-        if (down == 1) 
-        {
-            lastboot = ut.ut_time;
-            whydown = (ut.ut_type == SHUTDOWN_TIME) ? R_DOWN : R_CRASH;
-            for (p = utmplist; p; p = next) 
-            {
-                next = p->next;
-                nfree(p);
+    switch (ut.ut_type) {
+      case SHUTDOWN_TIME:
+        lastdown = lastrch = ut.ut_time;
+        down = 1;
+        break;
+      case BOOT_TIME:
+        strcpy(ut.ut_line, "system boot");
+        quit = last_display(idx, &ut, lastdown, R_REBOOT, search);
+        down = 1;
+        break;
+      case USER_PROCESS:
+        c = 0;
+        for (p = utmplist; p; p = next) {
+          next = p->next;
+          if (strncmp(p->ut.ut_line, ut.ut_line, UT_LINESIZE) == 0) {
+            /* show it */
+            if (c == 0) {
+              x = last_display(idx, &ut, p->ut.ut_time, R_NORMAL, search);
+              quit |= x;
+              c = 1;
             }
-            utmplist = NULL;
-            down = 0;
+            if (p->next) 
+              p->next->prev = p->prev;
+
+            if (p->prev)
+              p->prev->next = p->next;
+            else
+              utmplist = p->next;
+            nfree(p);
+          }
         }
-    }
-    for (p = utmplist; p; p = next) {
+        /* not found? -> crashed, down, still logged in or
+         * logout missing:
+         */
+        if (c == 0) {
+          if (lastboot == 0) {
+            c = R_NOW;
+            /* still alive? */
+            if (dcc[ut.ut_pid].sock == -1) /* No */
+              c = R_PHANTOM;
+          }
+          else 
+            c = whydown;
+          
+          x = last_display(idx, &ut, lastboot, c, search);
+          quit |= x;
+        }
+        /* no break here! */
+      case DEAD_PROCESS:
+        if (ut.ut_line[0] == 0)
+          break;
+        if ((p = nmalloc(sizeof(struct utmplist))) == NULL) {
+          putlog(LOG_DEBUG, "*", "%s.mod: out of memory!?", MODULE_NAME);
+          quit = 1;
+          return 1;
+        }
+        memcpy(&p->ut, &ut, sizeof(struct utmp));
+        p->next  = utmplist;
+        p->prev  = NULL;
+        if (utmplist) 
+          utmplist->prev = p;
+
+        utmplist = p;
+        break;
+    } /* END switch (ut.ut_type) */
+    if (down) {
+      lastboot = ut.ut_time;
+      whydown = (ut.ut_type == SHUTDOWN_TIME) ? R_DOWN : R_CRASH;
+      for (p = utmplist; p; p = next) {
         next = p->next;
         nfree(p);
+      }
+      utmplist = NULL;
+      down = 0;
     }
-    utmplist = NULL;
-    fclose(fp);
-    dprintf(idx, "wtmp file begins %s\n", ctime(&last_rec_begin)); 
+  } /* END while (!quit) */
+  for (p = utmplist; p; p = next) {
+    next = p->next;
+    nfree(p);
+  }
+  utmplist = NULL;
+  fclose(fp);
+  dprintf(idx, "wtmp file begins %s\n", ctime(&last_rec_begin)); 
 
-    if (last_recs_done >= last_max_lines) 
-        dprintf(idx, "------ more than %d lines found, truncating -----\n",
-                    last_max_lines
-               );
-    return 0;
+  if (last_recs_done >= last_max_lines) 
+    dprintf(idx, "------ more than %d lines found, truncating -----\n",
+                 last_max_lines
+           );
+  return 0;
 }
 
 static int last_dcc_last(struct userrec *u, int idx, char *par)
 {
-    char *search;
-    putlog(LOG_CMDS, "*", "#%s# last %s", dcc[idx].nick, par);
-    dprintf(idx, "HANDLE    IDX          WHEN                                  HOST\n"); 
-    search = newsplit(&par);
-    return last_read_wtmp(idx, search);
+  char *search;
+  putlog(LOG_CMDS, "*", "#%s# last %s", dcc[idx].nick, par);
+  search = newsplit(&par);
+  return last_read_wtmp(idx, search);
 }
 
 static int last_chon(char *handle, int idx) 
 {
-    (void) last_write_wtmp(idx, 1);
-    return 0;
+  (void) last_write_wtmp(idx, 1);
+  return 0;
 }
 
 static int last_chof(char *handle, int idx) 
 {
-    (void) last_write_wtmp(idx, 0);
-    return 0;
+  (void) last_write_wtmp(idx, 0);
+  return 0;
 }
 
 static cmd_t last_dcc[] = {
-    {"last", "",   last_dcc_last, NULL},
-    {NULL,   NULL, NULL,     NULL}
+  {"last", "",   last_dcc_last, NULL},
+  {NULL,   NULL, NULL,     NULL}
 };
+
 static cmd_t last_cmd_chon[] = {
-    {"*",    "", last_chon, "last:chon"},
-    {NULL,   NULL, NULL,     NULL}
+  {"*",    "", last_chon, "last:chon"},
+  {NULL,   NULL, NULL,     NULL}
 };
+
 static cmd_t last_cmd_chof[] = {
-    {"*",    "", last_chof, "last:chof"},
-    {NULL,   NULL, NULL,     NULL}
+  {"*",    "", last_chof, "last:chof"},
+  {NULL,   NULL, NULL,     NULL}
 };
+
 static tcl_strings last_strings[] = {
-    {"last-wtmp-file",   last_wtmp_file,      120, STR_PROTECT},
-    {NULL,          NULL,           0,             0}
+  {"last-wtmp-file",   last_wtmp_file,      120, STR_PROTECT},
+  {NULL,          NULL,           0,             0}
 };
 
 static int last_expmem()
 {
-    return 0;
+  return 0;
 }
 
 /* Report on current seen info for .modulestat. */
 static void last_report(int idx, int details)
 {
-    if (details) {
-        int size = last_expmem();
-
-        dprintf(idx, "    Using %d byte%s of memory\n", size,
-            (size != 1) ? "s" : "");
-    }
+  if (details) {
+    int size = last_expmem();
+    dprintf(idx, "    Using %d byte%s of memory\n", 
+              size, (size != 1) ? "s" : "");
+  }
 }
 
 
 static char *last_close()
 {
-    struct utmp entry;
-    entry.ut_type = SHUTDOWN_TIME;
-    entry.ut_pid  = 0;
-    strcpy(entry.ut_line, "~");
-    strcpy(entry.ut_id, "~~");
-    entry.ut_time = 0;
-    strcpy(entry.ut_user, "unload");
-    memset(entry.ut_host,0,UT_HOSTSIZE);
-    entry.ut_addr = 0;
-    (void) last_init_wtmp();
-    updwtmp((const char *)last_wtmp_file, &entry);
+  struct utmp entry;
+  entry.ut_type = SHUTDOWN_TIME;
+  entry.ut_pid  = 0;
+  strcpy(entry.ut_line, "~");
+  strcpy(entry.ut_id, "~~");
+  entry.ut_time = 0;
+  strcpy(entry.ut_user, "unload");
+  memset(entry.ut_host,0,UT_HOSTSIZE);
+  entry.ut_addr = 0;
+  (void) last_init_wtmp();
+  updwtmp((const char *)last_wtmp_file, &entry);
 
-    // p_tcl_bind_list H_temp;
-    rem_builtins(H_dcc, last_dcc);
-    rem_builtins(H_chon, last_cmd_chon);
-    rem_builtins(H_chof, last_cmd_chof);
-    // rem_help_reference("last.help");
-    module_undepend(MODULE_NAME);
-    return NULL;
+  rem_builtins(H_dcc, last_dcc);
+  rem_builtins(H_chon, last_cmd_chon);
+  rem_builtins(H_chof, last_cmd_chof);
+  // rem_help_reference("last.help");
+  module_undepend(MODULE_NAME);
+  return NULL;
 }
 
 EXPORT_SCOPE char *last_start();
 
 static Function last_table[] = {
-    (Function) last_start,
-    (Function) last_close,
-    (Function) last_expmem,
-    (Function) last_report,
+  (Function) last_start,
+  (Function) last_close,
+  (Function) last_expmem,
+  (Function) last_report,
 };
-
-
 
 char *last_start(Function *egg_func_table)
 {
-    global = egg_func_table;
-    char modvers[UT_HOSTSIZE+1];
-    module_register(MODULE_NAME, last_table, 
-                    LAST_MOD_MAJOR_VERSION, 
-                    LAST_MOD_MINOR_VERSION
-                   );
-    if (!module_depend(MODULE_NAME, "eggdrop", 106, 0)) {
-        module_undepend(MODULE_NAME);
-        return "This module requires Eggdrop 1.6.0 or later.";
-    }
-    add_tcl_strings(last_strings);
-    add_builtins(H_dcc,  last_dcc);
-    add_builtins(H_chon, last_cmd_chon);
-    add_builtins(H_chof, last_cmd_chof);
+  global = egg_func_table;
+  char modvers[UT_HOSTSIZE+1];
+  module_register(MODULE_NAME, last_table, 
+                  LAST_MOD_MAJOR_VERSION, LAST_MOD_MINOR_VERSION
+                 );
+  if (!module_depend(MODULE_NAME, "eggdrop", 106, 0)) {
+    module_undepend(MODULE_NAME);
+    return "This module requires Eggdrop 1.6.0 or later.";
+  }
+  add_tcl_strings(last_strings);
+  add_builtins(H_dcc,  last_dcc);
+  add_builtins(H_chon, last_cmd_chon);
+  add_builtins(H_chof, last_cmd_chof);
 
-    if (last_init_wtmp() == 0)
-        return NULL;
-
-    // add_help_reference("last.help");
-    struct utmp entry;
-    entry.ut_type = BOOT_TIME;
-    entry.ut_pid  = 0;
-    entry.ut_addr = 0;
-    entry.ut_time = time(NULL);
-    strcpy(entry.ut_line,  "~");
-    strcpy(entry.ut_id,    "~~");
-    strcpy(entry.ut_user,  "modload");
-    snprintf(modvers, UT_HOSTSIZE, "%s.mod %d.%d", 
-                                    MODULE_NAME, 
-                                    LAST_MOD_MAJOR_VERSION, 
-                                    LAST_MOD_MINOR_VERSION
-            );
-    strncpy(entry.ut_host, modvers, UT_HOSTSIZE);
-    updwtmp((const char *)last_wtmp_file, &entry);
+  if (last_init_wtmp() == 0)
     return NULL;
+
+  // add_help_reference("last.help");
+  struct utmp entry;
+  entry.ut_type = BOOT_TIME;
+  entry.ut_pid  = 0;
+  entry.ut_addr = 0;
+  entry.ut_time = time(NULL);
+  strcpy(entry.ut_line,  "~");
+  strcpy(entry.ut_id,    "~~");
+  strcpy(entry.ut_user,  "modload");
+  snprintf(modvers, UT_HOSTSIZE, "%s.mod %d.%d", 
+                                 MODULE_NAME, 
+                                 LAST_MOD_MAJOR_VERSION, 
+                                 LAST_MOD_MINOR_VERSION
+          );
+  strncpy(entry.ut_host, modvers, UT_HOSTSIZE);
+  updwtmp((const char *)last_wtmp_file, &entry);
+  return NULL;
 }
 
-
-// vim: ts=4 sw=4 expandtab syn=c
+// vim: ts=2 sw=2 expandtab syn=c
