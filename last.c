@@ -210,7 +210,7 @@ int last_display(int idx, struct utmp *p, time_t t, int what, char *search)
   secs = t - p->ut_time;
   my_mins  = (secs / 60) % 60;
   my_hours = (secs / 3600) % 24;
-  my_days  = (secs / 86400) % 86400;
+  my_days  = (secs / 86400);
   if (my_days)
       sprintf(length, "(%d+%02d:%02d)", my_days, my_hours, my_mins);
   else
@@ -344,7 +344,8 @@ int last_read_wtmp(int idx, char *search)
         
     switch (ut.ut_type) {
       case SHUTDOWN_TIME:
-        lastdown = lastrch = ut.ut_time;
+        if (ut.ut_time)
+          lastdown = lastrch = ut.ut_time;
         down = 1;
         break;
       case BOOT_TIME:
@@ -406,7 +407,9 @@ int last_read_wtmp(int idx, char *search)
         break;
     } /* END switch (ut.ut_type) */
     if (down) {
-      lastboot = ut.ut_time;
+      if (ut.ut_time) 
+        lastboot = ut.ut_time;
+
       whydown = (ut.ut_type == SHUTDOWN_TIME) ? R_DOWN : R_CRASH;
       for (p = utmplist; p; p = next) {
         next = p->next;
@@ -494,7 +497,7 @@ static char *last_close()
   entry.ut_pid  = 0;
   strcpy(entry.ut_line, "~");
   strcpy(entry.ut_id, "~~");
-  entry.ut_time = 0;
+  entry.ut_time = time(NULL);
   strcpy(entry.ut_user, "unload");
   memset(entry.ut_host,0,UT_HOSTSIZE);
   entry.ut_addr = 0;
