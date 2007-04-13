@@ -76,26 +76,46 @@ struct utmplist {
 };
 struct utmplist *utmplist = NULL;
 
+int last_init_wtmp()
+{
+    FILE *fp;
+    if ((fp = fopen(last_wtmp_file, "r")) == NULL && errno == ENOENT) 
+    {
+        if ((fp = fopen(last_wtmp_file, "w")) == NULL)
+        {
+            putlog(LOG_MISC, "*", 
+                "%s.mod: failed to initialize wtmp file `%s': %s'", 
+                MODULE_NAME,
+                last_wtmp_file, 
+                strerror(errno)
+            );
+            return 0;
+        }
+    } 
+    fclose(fp);
+    return 1;
+}
+
 static int last_write_wtmp(int idx, int login)
 {
     struct utmp entry;
     char temp[512];
 
-    entry.ut_pid  = idx;
-    entry.ut_addr = dcc[idx].addr;
-    entry.ut_pid  = idx;
+    entry.ut_pid  = idx; /* this is unique, so we can use it as PID */
+    /* for future use, record the ip */
+    entry.ut_addr = dcc[idx].addr ? dcc[idx].addr : 0;
     entry.ut_time = time(NULL);
-    strcpy(entry.ut_user, dcc[idx].nick);
 
-    sprintf(temp, "%s", 
-                dcc[idx].addr ?  iptostr(htonl(dcc[idx].addr)) : dcc[idx].host
-           );
+    /* NICKLEN is usually less than UT_NAMESIZE, but... */
+    strncpy(entry.ut_user, dcc[idx].nick, UT_NAMESIZE);
+
+    snprintf(temp, UT_HOSTSIZE, "%s", dcc[idx].host);
     strcpy(entry.ut_host, temp);
 
-    sprintf(temp, "%d", idx);
+    snprintf(temp, 4, "%d", idx);
     strcpy(entry.ut_id,   temp);
-    sprintf(temp, "idx%d", idx);
-    // memset(&entry.ut_line, 0, UT_LINESIZE);
+
+    snprintf(temp, UT_LINESIZE, "idx%d", idx);
     strcpy(entry.ut_line, temp);
 
     if (login) 
@@ -103,6 +123,8 @@ static int last_write_wtmp(int idx, int login)
     else
         entry.ut_type = DEAD_PROCESS;
 
+    if (last_init_wtmp() == 0) 
+        return 1;
     updwtmp((const char *)last_wtmp_file, &entry);
     return 0;
 }
@@ -121,8 +143,10 @@ int last_uread(FILE *fp, struct utmp *u, int *quit)
     if (r == 1)
     {
         if (fseeko(fp, -2 * sizeof(struct utmp), SEEK_CUR) < 0)
+        {
             if (quit)
                 *quit = 1;
+        }
         if ((ftell(fp) == 0) && quit) 
             *quit = 1;
     }
@@ -140,7 +164,7 @@ int last_display(int idx, struct utmp *p, time_t t, int what, char *search)
     char        domain[256];
     char        *s, *walk;
     int         my_mins, my_hours, my_days;
-    int         r, len;
+    // int         r, len;
  
     utline[0] = 0;
     strncat(utline, p->ut_line, UT_LINESIZE);
@@ -334,7 +358,7 @@ int last_read_wtmp(int idx, char *search)
                     {
                         c = R_NOW;
                         /* still alive? */
-                        if (dcc[ut.ut_pid].sock == -1)
+                        if (dcc[ut.ut_pid].sock == -1) /* No */
                             c = R_PHANTOM;
 
                     }
@@ -457,10 +481,11 @@ static char *last_close()
     entry.ut_time = 0;
     strcpy(entry.ut_user, "unload");
     memset(entry.ut_host,0,UT_HOSTSIZE);
-    entry.ut_addr=0;
+    entry.ut_addr = 0;
+    (void) last_init_wtmp();
     updwtmp((const char *)last_wtmp_file, &entry);
 
-    p_tcl_bind_list H_temp;
+    // p_tcl_bind_list H_temp;
     rem_builtins(H_dcc, last_dcc);
     rem_builtins(H_chon, last_cmd_chon);
     rem_builtins(H_chof, last_cmd_chof);
@@ -478,26 +503,12 @@ static Function last_table[] = {
     (Function) last_report,
 };
 
+
+
 char *last_start(Function *egg_func_table)
 {
     global = egg_func_table;
-    FILE *fp;
     char modvers[UT_HOSTSIZE+1];
-    if ((fp = fopen(last_wtmp_file, "r")) == NULL && errno == ENOENT) 
-    {
-        if ((fp = fopen(last_wtmp_file, "w")) == NULL)
-        {
-            putlog(LOG_MISC, "*", 
-                "%s.mod: failed to initialize wtmp file `%s': %s'", 
-                MODULE_NAME,
-                last_wtmp_file, 
-                strerror(errno)
-            );
-            return NULL;
-        }
-    } 
-    fclose(fp);
-
     module_register(MODULE_NAME, last_table, 
                     LAST_MOD_MAJOR_VERSION, 
                     LAST_MOD_MINOR_VERSION
@@ -510,6 +521,9 @@ char *last_start(Function *egg_func_table)
     add_builtins(H_dcc,  last_dcc);
     add_builtins(H_chon, last_cmd_chon);
     add_builtins(H_chof, last_cmd_chof);
+
+    if (last_init_wtmp() == 0)
+        return NULL;
 
     // add_help_reference("last.help");
     struct utmp entry;

@@ -13,7 +13,7 @@ modules: ../../../last.$(MOD_EXT)
 
 ../last.o:
 	echo $(CC) $(CFLAGS)
-	$(CC) -lutil $(CFLAGS) $(CPPFLAGS) -DMAKING_MODS -c $(srcdir)/last.c
+	$(CC) $(CFLAGS) $(CPPFLAGS) -DMAKING_MODS -c $(srcdir)/last.c
 	@rm -f ../last.o
 	mv last.o ../
 
