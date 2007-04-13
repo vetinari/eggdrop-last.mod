@@ -90,6 +90,8 @@ int last_init_wtmp()
 {
   FILE *fp;
   if ((fp = fopen(last_wtmp_file, "r")) == NULL && errno == ENOENT) {
+    /* not existsing -> first load or file removed 
+     *  => initialize it with size 0 */
     if ((fp = fopen(last_wtmp_file, "w")) == NULL) {
       putlog(LOG_MISC, "*", "%s.mod: failed to initialize wtmp file `%s': %s'", 
                 MODULE_NAME,
@@ -99,9 +101,14 @@ int last_init_wtmp()
       return 0;
     }
   } 
-  else 
+  else {
+    putlog(LOG_MISC, "*", "%s.mod: failed to initialize wtmp file `%s': %s'", 
+                MODULE_NAME,
+                last_wtmp_file, 
+                strerror(errno)
+          );
     return 0; 
-
+  }
   fclose(fp);
   return 1;
 }
@@ -141,7 +148,7 @@ static int last_write_wtmp(int idx, int login)
   return 0;
 }
 
-int last_uread(FILE *fp, struct utmp *u, int *quit)
+int last_uread(FILE *fp, struct utmp *u, int *quit, int *been_here)
 {
   off_t r;
   if (u == NULL) {
@@ -160,7 +167,10 @@ int last_uread(FILE *fp, struct utmp *u, int *quit)
       if ((ftell(fp) == 0) && quit) {
         /* were back at beginning of file, stop reading... 
          * else, we'd read the first entry inifinite times? */
-        *quit = 1;
+        if (*been_here)
+          *quit = 1;
+        else
+          *been_here++;
       }
     }
   }
@@ -244,8 +254,12 @@ int last_display(int idx, struct utmp *p, time_t t, int what, char *search)
   strncpy(domain, p->ut_host, UT_HOSTSIZE); 
   snprintf(final, sizeof(final),
               "%-9.9s %-12.12s %-16.16s %-7.7s %-12.12s %s",
-              p->ut_name, utline, 
-              logintime, logouttime, length, domain
+              p->ut_name, /* truncated at def NICKLEN of 9 */ 
+              utline, 
+              logintime, 
+              logouttime, 
+              length, 
+              domain
           );
 
   /* clean string of unprintable chars */
@@ -266,21 +280,22 @@ int last_read_wtmp(int idx, char *search)
 {
   FILE   *fp; /* fh for wtmp file */
   struct stat st;
-  time_t    last_rec_begin = 0;
+  time_t last_rec_begin = 0;
 
-  struct utmp ut;   /* Current utmp entry */
-  struct utmp oldut;    /* Old utmp entry to check for duplicates */
-  struct utmplist *p;   /* Pointer into utmplist */
-  struct utmplist *next;/* Pointer into utmplist */
+  struct utmp ut;        /* Current utmp entry */
+  struct utmp oldut;     /* Old utmp entry to check for duplicates */
+  struct utmplist *p;    /* Pointer into utmplist */
+  struct utmplist *next; /* Pointer into utmplist */
 
-  time_t lastboot = 0; // time(NULL);  /* Last boottime */
+  time_t lastboot = 0;   /* Last boottime */
   time_t lastrch  = 0;   /* Last run level change */
   time_t lastdown = time(NULL);  /* Last downtime */
-  int whydown = 0;  /* Why we went down: crash or shutdown */
+  int whydown = 0;       /* Why we went down: crash or shutdown */
 
-  int c, x;     /* Scratch */
+  int c, x;         /* Scratch */
   int quit = 0;     /* Flag */
   int down = 0;     /* Down flag */
+  int at_first = 0; /* we've been at beginnin of wtmp file this many times */
 
   time_t until = 0; /* at what time to stop parsing the file */
 
@@ -297,7 +312,7 @@ int last_read_wtmp(int idx, char *search)
           "HANDLE    IDX          WHEN                                  HOST\n"
          ); 
 
-  if (last_uread(fp, &ut, NULL) == 1) 
+  if (last_uread(fp, &ut, NULL, &at_first) == 1) 
     last_rec_begin = ut.ut_time;
   else {
     fstat(fileno(fp), &st);
@@ -309,13 +324,14 @@ int last_read_wtmp(int idx, char *search)
    * Go to end of file minus one structure
    * and/or initialize utmp reading code.
    */
-  last_uread(fp, NULL, NULL);
+  last_uread(fp, NULL, NULL, &at_first);
 
   /*
    * Read struct after struct backwards from the file.
    */
   while (!quit) {
-    if (last_uread(fp, &ut, &quit) != 1)
+
+    if (last_uread(fp, &ut, &quit, &at_first) != 1)
       break;
 
     // if (until && until < ut.ut_time) 
