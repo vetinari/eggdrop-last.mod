@@ -40,7 +40,7 @@
 
 #define MODULE_NAME "last"
 #define LAST_MOD_MAJOR_VERSION 0
-#define LAST_MOD_MINOR_VERSION 1
+#define LAST_MOD_MINOR_VERSION 2
 #define MAKING_LAST
 
 #include "src/mod/module.h"
