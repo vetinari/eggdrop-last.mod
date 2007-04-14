@@ -373,10 +373,13 @@ int last_read_wtmp(int idx, char *search)
          */
         if (c == 0) {
           if (lastboot == 0) {
-            c = R_NOW;
             /* still alive? */
-            if (dcc[ut.ut_pid].sock == -1) /* No */
-              c = R_PHANTOM;
+            if (dcc[ut.ut_pid].sock != -1 && 
+                strcmp(dcc[ut.ut_pid].nick, ut.ut_name) == 0) 
+              c = R_NOW; /* Yes, someone connected on that idx 
+                            and nicks are the same */
+            else 
+              c = R_PHANTOM; /* No */
           }
           else 
             c = whydown;
