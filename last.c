@@ -38,13 +38,20 @@
 
 #define MODULE_NAME "last"
 #define LAST_MOD_MAJOR_VERSION 0
-#define LAST_MOD_MINOR_VERSION 3
+#define LAST_MOD_MINOR_VERSION 4
 #define MAKING_LAST
 
-#include "src/mod/module.h"
-#include "src/users.h"
+#ifdef TIME_WITH_SYS_TIME
+#  include <sys/time.h>
+#  include <time.h>
+#else
+#  ifdef HAVE_SYS_TIME_H
+#    include <sys/time.h>
+#  else
+#    include <time.h>
+#  endif
+#endif
 
-#include <time.h>
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
@@ -53,6 +60,9 @@
 #include <unistd.h>
 #include <utmp.h>
 #include <stdlib.h>
+
+#include "src/mod/module.h"
+#include "src/users.h"
 
 #ifndef SHUTDOWN_TIME
 #  define SHUTDOWN_TIME 254
@@ -281,11 +291,11 @@ int last_read_wtmp(int idx, char *search)
   time_t lastdown = time(NULL);  /* Last downtime */
   int whydown = 0;       /* Why we went down: crash or shutdown */
 
-  int c, x;         /* Scratch */
+  int c;         /* Scratch */
   int quit = 0;     /* Flag */
   int down = 0;     /* Down flag */
 
-  time_t until = 0; /* at what time to stop parsing the file */
+  // time_t until = 0; /* at what time to stop parsing the file */
 
   last_recs_done = 0;
   if ((fp = fopen(last_wtmp_file, "r")) == NULL) {
@@ -436,7 +446,7 @@ int last_read_wtmp(int idx, char *search)
 static int last_dcc_last(struct userrec *u, int idx, char *par)
 {
   char *search;
-  char *p, *v, *t;
+  char *p, *t;
   int ret, max;
   char usage[512] = "last: Usage: last [-n NUM|-NUM] [NICK|HOST|IDX]\n";
 
