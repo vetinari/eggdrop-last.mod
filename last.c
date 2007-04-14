@@ -200,7 +200,7 @@ int last_display(int idx, struct utmp *p, time_t t, int what, char *search)
         (strncmp(utline, "idx", 3) == 0 &&
          strcmp(utline + 3, search) == 0) ||
          wild_match(search, p->ut_host)
-       ) {} 
+       ) { /* ok, this is something we have to show */ } 
     else
       return 0;
   }
@@ -415,6 +415,7 @@ int last_read_wtmp(int idx, char *search)
         utmplist = p;
         break;
     } /* END switch (ut.ut_type) */
+
     if (down) {
       if (ut.ut_time) 
         lastboot = ut.ut_time;
@@ -428,6 +429,7 @@ int last_read_wtmp(int idx, char *search)
       down = 0;
     }
   } /* END while (!quit) */
+
   for (p = utmplist; p; p = next) {
     next = p->next;
     nfree(p);
@@ -465,6 +467,7 @@ static int last_dcc_last(struct userrec *u, int idx, char *par)
           for (t = p; t[0]; t++) {
             if (!isdigit((unsigned char)t[0])) {
               dprintf(idx, usage);
+              last_max_lines = max;
               return 1;
             }
           }
@@ -489,10 +492,17 @@ static int last_dcc_last(struct userrec *u, int idx, char *par)
         for (t = p; t[0]; t++) {
             if (!isdigit((unsigned char)t[0])) {
               dprintf(idx, usage);
+              last_max_lines = max;
               return 1;
             }
         }
         last_max_lines = atoi(p);
+        break;
+      default: 
+        dprintf(idx, "last: unknown option '%s'\n", p);
+        dprintf(idx, usage);
+        last_max_lines = max;
+        return 1;
         break;
     }
     p = newsplit(&par);
@@ -606,11 +616,11 @@ char *last_start(Function *egg_func_table)
   add_builtins(H_dcc,  last_dcc);
   add_builtins(H_chon, last_cmd_chon);
   add_builtins(H_chof, last_cmd_chof);
+  add_help_reference("last.help");
 
   if (last_init_wtmp() == 0)
     return NULL;
 
-  add_help_reference("last.help");
   struct utmp entry;
   entry.ut_type = BOOT_TIME;
   entry.ut_pid  = 0;
