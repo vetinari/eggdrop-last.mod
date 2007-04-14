@@ -1,0 +1,15 @@
+%{help=last}%{-}
+###  %blast%b <-n NUM|-NUM> <handle>
+   Shows the last NUM times <handle> was on the bot's partyline.
+%{help=last module}%{+n}
+###  %blast module%b
+   This module provides a last command via dcc. 
+
+   The following commands are provided by the seen module:
+
+   For all users:
+      %blast%b
+%{help=all}%{-}
+###  %blast module%b commands
+   For all users:
+      %blast%b

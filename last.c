@@ -576,7 +576,7 @@ static char *last_close()
   rem_builtins(H_dcc, last_dcc);
   rem_builtins(H_chon, last_cmd_chon);
   rem_builtins(H_chof, last_cmd_chof);
-  // rem_help_reference("last.help");
+  rem_help_reference("last.help");
   module_undepend(MODULE_NAME);
   return NULL;
 }
@@ -610,7 +610,7 @@ char *last_start(Function *egg_func_table)
   if (last_init_wtmp() == 0)
     return NULL;
 
-  // add_help_reference("last.help");
+  add_help_reference("last.help");
   struct utmp entry;
   entry.ut_type = BOOT_TIME;
   entry.ut_pid  = 0;
