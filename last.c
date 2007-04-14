@@ -82,6 +82,7 @@ struct utmplist {
   struct utmplist *next;
   struct utmplist *prev;
 };
+
 struct utmplist *utmplist = NULL;
 
 int last_init_wtmp()
@@ -435,9 +436,62 @@ int last_read_wtmp(int idx, char *search)
 static int last_dcc_last(struct userrec *u, int idx, char *par)
 {
   char *search;
+  char *p, *v, *t;
+  int ret, max;
+  char usage[512] = "last: Usage: last [-n NUM|-NUM] [NICK|HOST|IDX]\n";
+
+  max = last_max_lines;
   putlog(LOG_CMDS, "*", "#%s# last %s", dcc[idx].nick, par);
-  search = newsplit(&par);
-  return last_read_wtmp(idx, search);
+  p = newsplit(&par);
+  while (p[0] == '-') {
+    if (p[1] == 0) {
+      dprintf(idx, usage);
+      return 1;
+    }
+    switch (p[1]) {
+      case 'n':
+        p = newsplit(&par);
+        if (p[0] != 0) {
+          for (t = p; t[0]; t++) {
+            if (!isdigit((unsigned char)t[0])) {
+              dprintf(idx, usage);
+              return 1;
+            }
+          }
+          last_max_lines = atoi(p);
+        }
+        else {
+          dprintf(idx, usage);
+          return 1;
+        }
+        break;
+      case '0':
+      case '1':
+      case '2':
+      case '3':
+      case '4':
+      case '5':
+      case '6':
+      case '7':
+      case '8':
+      case '9':
+        p++;
+        for (t = p; t[0]; t++) {
+            if (!isdigit((unsigned char)t[0])) {
+              dprintf(idx, usage);
+              return 1;
+            }
+        }
+        last_max_lines = atoi(p);
+        break;
+    }
+    p = newsplit(&par);
+  }
+  search = p;
+  ret = last_read_wtmp(idx, search);
+
+  last_max_lines = max;
+  return ret;
 }
 
 static int last_chon(char *handle, int idx) 
@@ -465,6 +519,11 @@ static cmd_t last_cmd_chon[] = {
 static cmd_t last_cmd_chof[] = {
   {"*",    "", last_chof, "last:chof"},
   {NULL,   NULL, NULL,     NULL}
+};
+
+static tcl_ints last_ints[] = {
+  {"last-max-lines",  &last_max_lines},
+  {NULL,              NULL}
 };
 
 static tcl_strings last_strings[] = {
@@ -502,6 +561,8 @@ static char *last_close()
   (void) last_init_wtmp();
   updwtmp((const char *)last_wtmp_file, &entry);
 
+  rem_tcl_strings(last_strings);
+  rem_tcl_ints(last_ints);
   rem_builtins(H_dcc, last_dcc);
   rem_builtins(H_chon, last_cmd_chon);
   rem_builtins(H_chof, last_cmd_chof);
@@ -531,6 +592,7 @@ char *last_start(Function *egg_func_table)
     return "This module requires Eggdrop 1.6.0 or later.";
   }
   add_tcl_strings(last_strings);
+  add_tcl_ints(last_ints);
   add_builtins(H_dcc,  last_dcc);
   add_builtins(H_chon, last_cmd_chon);
   add_builtins(H_chof, last_cmd_chof);
