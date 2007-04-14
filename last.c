@@ -12,7 +12,7 @@
  *
  */
 /*
- * Copyright (C) 2007 Hano Hecker
+ * Copyright (C) 2007 Hanno Hecker
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -31,16 +31,14 @@
 
 /*
  * TODO:
- *  - fix missing first entry of wtmp file
  *  - time changes? i.e. CET -> CEST -> CET
- *  - search with wildcards? i.e. '.last Veti*'
  *  - IPv6 
  *  -
  */
 
 #define MODULE_NAME "last"
 #define LAST_MOD_MAJOR_VERSION 0
-#define LAST_MOD_MINOR_VERSION 2
+#define LAST_MOD_MINOR_VERSION 3
 #define MAKING_LAST
 
 #include "src/mod/module.h"
@@ -179,23 +177,20 @@ int last_display(int idx, struct utmp *p, time_t t, int what, char *search)
   char        final[128];
   char        utline[UT_LINESIZE+1];
   char        domain[256];
-  char        *s, *walk;
+  char        *s;
   int         my_mins, my_hours, my_days;
-  // int         r, len;
  
   utline[0] = 0;
   strncat(utline, p->ut_line, UT_LINESIZE);
 
   if (search[0] != 0) {
-    for (walk = search; walk[0] != 0; walk++) {
-      if (strncasecmp(p->ut_name, walk, UT_NAMESIZE) == 0 ||
-          strcmp(utline, walk) == 0 ||
-          (strncmp(utline, "idx", 3) == 0 &&
-           strcmp(utline + 3, walk) == 0) ||
-           strncmp(p->ut_host, walk, UT_HOSTSIZE) == 0
-         ) break;
-    }
-    if (walk[0] == 0) 
+    if (wild_match(search, p->ut_name) ||
+        strcmp(utline, search) == 0 ||
+        (strncmp(utline, "idx", 3) == 0 &&
+         strcmp(utline + 3, search) == 0) ||
+         wild_match(search, p->ut_host)
+       ) {} 
+    else
       return 0;
   }
 
@@ -427,7 +422,7 @@ int last_read_wtmp(int idx, char *search)
   fclose(fp);
   dprintf(idx, "wtmp file begins %s\n", ctime(&last_rec_begin)); 
 
-  if (last_recs_done >= last_max_lines) 
+  if (last_recs_done > last_max_lines) 
     dprintf(idx, "------ more than %d lines found, truncating -----\n",
                  last_max_lines
            );
