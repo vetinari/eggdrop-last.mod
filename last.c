@@ -81,8 +81,11 @@ static Function *global = NULL;
 /* file where all logins are saved */
 static char last_wtmp_file[121] = "Eggdrop.last";
 
-static int last_max_lines       = 20;
-static int last_recs_done       = 0;
+/* show this many lines, can be changed in config file or with -n NUM switch */
+static int    last_max_lines    = 20;
+static int    last_lines_done   = 0;
+static time_t last_until        = 0; /* for -t DATE */
+
 time_t lastdate;    /* Last date we've seen */
 
 /* Double linked list of struct utmp's */
@@ -259,8 +262,8 @@ int last_display(int idx, struct utmp *p, time_t t, int what, char *search)
   }
   dprintf(idx, "%s\n", final);
 
-  last_recs_done++;
-  if (last_recs_done >= last_max_lines)
+  last_lines_done++;
+  if (last_lines_done >= last_max_lines)
     return 1;    
 
   return 0;
@@ -286,9 +289,8 @@ int last_read_wtmp(int idx, char *search)
   int quit = 0;     /* Flag */
   int down = 0;     /* Down flag */
 
-  // time_t until = 0; /* at what time to stop parsing the file */
+  last_lines_done = 0;
 
-  last_recs_done = 0;
   if ((fp = fopen(last_wtmp_file, "r")) == NULL) {
 
     putlog(LOG_MISC, "*", "%s.mod: failed to open wtmp file: %s\n",
@@ -323,8 +325,8 @@ int last_read_wtmp(int idx, char *search)
     if (last_uread(fp, &ut, &quit) != 1)
       break;
 
-    // if (until && until < ut.ut_time) 
-    //   continue;
+    if (last_until && last_until < ut.ut_time) 
+      continue;
         
     if (memcmp(&ut, &oldut, sizeof(struct utmp)) == 0) 
       continue;
@@ -430,19 +432,58 @@ int last_read_wtmp(int idx, char *search)
   fclose(fp);
   dprintf(idx, "wtmp file begins %s\n", ctime(&last_rec_begin)); 
 
-  if (last_recs_done > last_max_lines) 
+  if (last_lines_done > last_max_lines) 
     dprintf(idx, "------ more than %d lines found, truncating -----\n",
                  last_max_lines
            );
   return 0;
 }
 
+time_t last_parsetm(char *ts)
+{
+  struct tm       u = {0}, origu;
+  time_t          tm;
+
+  if (sscanf(ts, "%4d%2d%2d%2d%2d%2d", &u.tm_year,
+      &u.tm_mon, &u.tm_mday, &u.tm_hour, &u.tm_min,
+      &u.tm_sec) != 6)
+    return (time_t)-1;
+
+  u.tm_year -= 1900;
+  u.tm_mon -= 1;
+  u.tm_isdst = -1;
+
+  origu = u;
+
+  if ((tm = mktime(&u)) == (time_t)-1)
+    return tm;
+
+  /*
+   *      Unfortunately mktime() is much more forgiving than
+   *      it should be.  For example, it'll gladly accept
+   *      "30" as a valid month number.  This behavior is by
+   *      design, but we don't like it, so we want to detect
+   *      it and complain.
+   */
+  if (u.tm_year != origu.tm_year ||
+      u.tm_mon != origu.tm_mon ||
+      u.tm_mday != origu.tm_mday ||
+      u.tm_hour != origu.tm_hour ||
+      u.tm_min != origu.tm_min ||
+      u.tm_sec != origu.tm_sec)
+    return (time_t)-1;
+
+  return tm;
+}
+
 static int last_dcc_last(struct userrec *u, int idx, char *par)
 {
   char *search;
-  char *p, *t;
-  int ret, max, end;
-  char usage[512] = "last: Usage: last [-n NUM|-NUM] [NICK|HOST|IDX]\n";
+  char *p, *t, d[15];
+  int ret, max, end, m;
+  char usage[512] = 
+    "last: Usage: last [-n NUM|-NUM] [-t DATE] [NICK|HOST|IDX]\n"
+    "   DATE: YYYYMMDDHHMMSS, missing parts from end will be filled with '0'\n";
 
   max = last_max_lines;
   end = 0;
@@ -453,6 +494,8 @@ static int last_dcc_last(struct userrec *u, int idx, char *par)
   while (p[0] == '-') {
     if (p[1] == 0) {
       dprintf(idx, usage);
+      last_max_lines = max;
+      last_until     = 0; 
       return 1;
     }
 
@@ -460,23 +503,52 @@ static int last_dcc_last(struct userrec *u, int idx, char *par)
       case '-': /* stop option processing if option is '--' */
         end = 1;
         break;
+
+      case 't':
+        p = newsplit(&par);
+        if (p[0] == 0) { 
+          dprintf(idx, usage);
+          last_max_lines = max;
+          last_until     = 0; 
+          return 1;
+        }
+
+        strncpy(d, p, 14); /* YYYYMMDDHHMMSS */
+        /* fill all trailing missing fields with "0" ... */
+        m = 0; 
+        for (t=p; t[0]; t++) {
+          ++m;
+        }
+        for (m; m < 14; m++) {
+          d[m] = '0';
+        }
+        d[14] = 0;
+        /* ... and parse the given date */
+        if ((last_until = last_parsetm(d)) == (time_t)-1) {
+          dprintf(idx, usage);
+          last_max_lines = max;
+          last_until     = 0; 
+          return 1;
+        }
+        break;
         
       case 'n': /* -n NUM */
         p = newsplit(&par);
-        if (p[0] != 0) {
-          for (t = p; t[0]; t++) {
-            if (!isdigit((unsigned char)t[0])) {
-              dprintf(idx, usage);
-              last_max_lines = max;
-              return 1;
-            }
-          }
-          last_max_lines = atoi(p);
-        }
-        else {
+        if (p[0] == 0) {
           dprintf(idx, usage);
+          last_max_lines = max;
+          last_until     = 0;
           return 1;
         }
+        for (t = p; t[0]; t++) {
+          if (!isdigit((unsigned char)t[0])) {
+            dprintf(idx, usage);
+            last_max_lines = max;
+            last_until     = 0;
+            return 1;
+          }
+        }
+        last_max_lines = atoi(p);
         break;
 
       case '0': /* -NUM */
@@ -494,6 +566,7 @@ static int last_dcc_last(struct userrec *u, int idx, char *par)
             if (!isdigit((unsigned char)t[0])) {
               dprintf(idx, usage);
               last_max_lines = max;
+              last_until     = 0;
               return 1;
             }
         }
@@ -504,6 +577,7 @@ static int last_dcc_last(struct userrec *u, int idx, char *par)
         dprintf(idx, "last: unknown option '%s'\n", p);
         dprintf(idx, usage);
         last_max_lines = max;
+        last_until     = 0;
         return 1;
         break;
     }
@@ -516,6 +590,8 @@ static int last_dcc_last(struct userrec *u, int idx, char *par)
   ret = last_read_wtmp(idx, search);
 
   last_max_lines = max;
+  last_until     = 0;
+
   return ret;
 }
 
