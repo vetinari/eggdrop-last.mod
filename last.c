@@ -449,19 +449,27 @@ static int last_dcc_last(struct userrec *u, int idx, char *par)
 {
   char *search;
   char *p, *t;
-  int ret, max;
+  int ret, max, end;
   char usage[512] = "last: Usage: last [-n NUM|-NUM] [NICK|HOST|IDX]\n";
 
   max = last_max_lines;
+  end = 0;
+
   putlog(LOG_CMDS, "*", "#%s# last %s", dcc[idx].nick, par);
   p = newsplit(&par);
+
   while (p[0] == '-') {
     if (p[1] == 0) {
       dprintf(idx, usage);
       return 1;
     }
+
     switch (p[1]) {
-      case 'n':
+      case '-': /* stop option processing if option is '--' */
+        end = 1;
+        break;
+        
+      case 'n': /* -n NUM */
         p = newsplit(&par);
         if (p[0] != 0) {
           for (t = p; t[0]; t++) {
@@ -478,7 +486,8 @@ static int last_dcc_last(struct userrec *u, int idx, char *par)
           return 1;
         }
         break;
-      case '0':
+
+      case '0': /* -NUM */
       case '1':
       case '2':
       case '3':
@@ -498,6 +507,7 @@ static int last_dcc_last(struct userrec *u, int idx, char *par)
         }
         last_max_lines = atoi(p);
         break;
+
       default: 
         dprintf(idx, "last: unknown option '%s'\n", p);
         dprintf(idx, usage);
@@ -506,7 +516,10 @@ static int last_dcc_last(struct userrec *u, int idx, char *par)
         break;
     }
     p = newsplit(&par);
+    if (end)
+      break;
   }
+
   search = p;
   ret = last_read_wtmp(idx, search);
 
