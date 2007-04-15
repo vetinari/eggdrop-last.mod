@@ -33,7 +33,6 @@
  * TODO:
  *  - time changes? i.e. CET -> CEST -> CET
  *  - IPv6 
- *  -
  */
 
 #define MODULE_NAME "last"
@@ -357,6 +356,7 @@ int last_read_wtmp(int idx, char *search)
       case BOOT_TIME:
         strcpy(ut.ut_line, "system boot");
         quit |= last_display(idx, &ut, lastdown, R_REBOOT, search);
+        lastdown = ut.ut_time;
         down = 1;
         break;
       case USER_PROCESS:
