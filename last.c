@@ -37,7 +37,7 @@
 
 #define MODULE_NAME "last"
 #define LAST_MOD_MAJOR_VERSION 0
-#define LAST_MOD_MINOR_VERSION 4
+#define LAST_MOD_MINOR_VERSION 5
 #define MAKING_LAST
 
 #ifdef TIME_WITH_SYS_TIME
@@ -84,6 +84,7 @@ static char last_wtmp_file[121] = "Eggdrop.last";
 /* show this many lines, can be changed in config file or with -n NUM switch */
 static int    last_max_lines    = 20;
 static int    last_lines_done   = 0;
+static int    last_show_ip      = 0;
 static time_t last_until        = 0; /* for -t DATE */
 
 time_t lastdate;    /* Last date we've seen */
@@ -243,8 +244,13 @@ int last_display(int idx, struct utmp *p, time_t t, int what, char *search)
       case R_NORMAL:
           break;
   }
-    
-  strncpy(domain, p->ut_host, UT_HOSTSIZE); 
+
+  if (last_show_ip) 
+    /* FIXME: this is IPv4 ONLY */
+    strncpy(domain, iptostr(iptolong(p->ut_addr)), UT_HOSTSIZE);
+  else
+    strncpy(domain, p->ut_host, UT_HOSTSIZE); 
+
   snprintf(final, sizeof(final),
               "%-9.9s %-12.12s %-16.16s %-7.7s %-12.12s %s",
               p->ut_name, /* truncated at def NICKLEN of 9 */ 
@@ -482,7 +488,7 @@ static int last_dcc_last(struct userrec *u, int idx, char *par)
   char *p, *t, d[15];
   int ret, max, end, m;
   char usage[512] = 
-    "last: Usage: last [-n NUM|-NUM] [-t DATE] [NICK|HOST|IDX]\n"
+    "last: Usage: last [-n NUM|-NUM] [-i] [-t DATE] [NICK|HOST|IDX]\n"
     "   DATE: YYYYMMDDHHMMSS, missing parts from end will be filled with '0'\n";
 
   max = last_max_lines;
@@ -496,6 +502,7 @@ static int last_dcc_last(struct userrec *u, int idx, char *par)
       dprintf(idx, usage);
       last_max_lines = max;
       last_until     = 0; 
+      last_show_ip   = 0;
       return 1;
     }
 
@@ -510,6 +517,7 @@ static int last_dcc_last(struct userrec *u, int idx, char *par)
           dprintf(idx, usage);
           last_max_lines = max;
           last_until     = 0; 
+          last_show_ip   = 0;
           return 1;
         }
 
@@ -519,7 +527,7 @@ static int last_dcc_last(struct userrec *u, int idx, char *par)
         for (t=p; t[0]; t++) {
           ++m;
         }
-        for (m; m < 14; m++) {
+        for (; m < 14; m++) {
           d[m] = '0';
         }
         d[14] = 0;
@@ -528,16 +536,22 @@ static int last_dcc_last(struct userrec *u, int idx, char *par)
           dprintf(idx, usage);
           last_max_lines = max;
           last_until     = 0; 
+          last_show_ip   = 0;
           return 1;
         }
         break;
         
+      case 'i':
+        last_show_ip = 1;
+        break;
+
       case 'n': /* -n NUM */
         p = newsplit(&par);
         if (p[0] == 0) {
           dprintf(idx, usage);
           last_max_lines = max;
           last_until     = 0;
+          last_show_ip   = 0;
           return 1;
         }
         for (t = p; t[0]; t++) {
@@ -545,6 +559,7 @@ static int last_dcc_last(struct userrec *u, int idx, char *par)
             dprintf(idx, usage);
             last_max_lines = max;
             last_until     = 0;
+            last_show_ip   = 0;
             return 1;
           }
         }
@@ -567,6 +582,7 @@ static int last_dcc_last(struct userrec *u, int idx, char *par)
               dprintf(idx, usage);
               last_max_lines = max;
               last_until     = 0;
+              last_show_ip   = 0;
               return 1;
             }
         }
@@ -578,6 +594,7 @@ static int last_dcc_last(struct userrec *u, int idx, char *par)
         dprintf(idx, usage);
         last_max_lines = max;
         last_until     = 0;
+        last_show_ip   = 0;
         return 1;
         break;
     }
@@ -591,6 +608,7 @@ static int last_dcc_last(struct userrec *u, int idx, char *par)
 
   last_max_lines = max;
   last_until     = 0;
+  last_show_ip   = 0;
 
   return ret;
 }
@@ -653,7 +671,7 @@ static char *last_close()
   struct utmp entry;
   entry.ut_type = SHUTDOWN_TIME;
   entry.ut_pid  = 0;
-  entry.ut_addr = 0;
+  entry.ut_addr = 0; /* FIXME: this is IPv4 ONLY */
   strcpy(entry.ut_line, "~");
   strcpy(entry.ut_id, "~~");
   entry.ut_time = time(NULL);
@@ -705,7 +723,7 @@ char *last_start(Function *egg_func_table)
   struct utmp entry;
   entry.ut_type = BOOT_TIME;
   entry.ut_pid  = 0;
-  entry.ut_addr = 0;
+  entry.ut_addr = 0; /* FIXME: this is IPv4 ONLY */
   entry.ut_time = time(NULL);
   strcpy(entry.ut_line,  "~");
   strcpy(entry.ut_id,    "~~");

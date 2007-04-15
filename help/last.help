@@ -1,6 +1,10 @@
 %{help=last}%{-}
-###  %blast%b <-n NUM|-NUM> <handle>
+###  %blast%b [-n NUM|-NUM] [-t DATE] [-i] <handle>
    Shows the last NUM times <handle> was on the bot's partyline.
+   With -t DATE (YYYYMMDDHHMMSS, trailing missing fields will be set 
+   to "0"): only older logins than DATE.
+   With -i: show IP instead of user@host.
+
 %{help=last module}%{+n}
 ###  %blast module%b
    This module provides a last command via dcc. 
