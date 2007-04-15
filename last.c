@@ -127,31 +127,23 @@ int last_init_wtmp()
 static int last_write_wtmp(int idx, int login)
 {
   struct utmp entry;
-  char temp[512];
-
-  entry.ut_pid  = idx; /* this is unique, so we can use it as PID */
-
-  /* FIXME, this is IPv4 ONLY */
-  entry.ut_addr = dcc[idx].addr ? dcc[idx].addr : 0; 
-
-  entry.ut_time = time(NULL);
-
-  /* NICKLEN is usually less than UT_NAMESIZE, but... */
-  strncpy(entry.ut_user, dcc[idx].nick, UT_NAMESIZE);
-
-  snprintf(temp, UT_HOSTSIZE, "%s", dcc[idx].host);
-  strcpy(entry.ut_host, temp);
-
-  snprintf(temp, 4, "%d", idx);
-  strcpy(entry.ut_id, temp);
-
-  snprintf(temp, UT_LINESIZE, "idx%d", idx);
-  strcpy(entry.ut_line, temp);
 
   if (login) 
     entry.ut_type = USER_PROCESS;
   else
     entry.ut_type = DEAD_PROCESS;
+
+  entry.ut_pid  = idx; /* this is unique, so we can use it as PID */
+  entry.ut_time = time(NULL);
+  /* NICKLEN is usually less than UT_NAMESIZE, but... */
+  strncpy(entry.ut_user, dcc[idx].nick, UT_NAMESIZE);
+  snprintf(entry.ut_host, UT_HOSTSIZE, "%s", dcc[idx].host);
+  snprintf(entry.ut_line, UT_LINESIZE, "idx%d", idx);
+
+  /* FIXME: this is IPv4 ONLY */
+  entry.ut_addr = dcc[idx].addr ? dcc[idx].addr : 0; 
+  /* FIXME: is this always 4 byte long everywhere? */
+  snprintf(entry.ut_id, 4, "%d", idx); 
 
   if (last_init_wtmp() == 0) 
     return 1;
@@ -585,12 +577,12 @@ static char *last_close()
   struct utmp entry;
   entry.ut_type = SHUTDOWN_TIME;
   entry.ut_pid  = 0;
+  entry.ut_addr = 0;
   strcpy(entry.ut_line, "~");
   strcpy(entry.ut_id, "~~");
   entry.ut_time = time(NULL);
   strcpy(entry.ut_user, "unload");
   memset(entry.ut_host,0,UT_HOSTSIZE);
-  entry.ut_addr = 0;
   (void) last_init_wtmp();
   updwtmp((const char *)last_wtmp_file, &entry);
 
