@@ -482,6 +482,13 @@ time_t last_parsetm(char *ts)
   return tm;
 }
 
+static void last_restore_defaults(int max)
+{
+  last_max_lines = max;
+  last_until     = 0; 
+  last_show_ip   = 0;
+}
+
 static int last_dcc_last(struct userrec *u, int idx, char *par)
 {
   char *search;
@@ -499,10 +506,8 @@ static int last_dcc_last(struct userrec *u, int idx, char *par)
 
   while (p[0] == '-') {
     if (p[1] == 0) {
+      last_restore_defaults(max);
       dprintf(idx, usage);
-      last_max_lines = max;
-      last_until     = 0; 
-      last_show_ip   = 0;
       return 1;
     }
 
@@ -511,13 +516,11 @@ static int last_dcc_last(struct userrec *u, int idx, char *par)
         end = 1;
         break;
 
-      case 't':
+      case 't': /* -t DATE, skip newer than DATE */
         p = newsplit(&par);
         if (p[0] == 0) { 
+          last_restore_defaults(max);
           dprintf(idx, usage);
-          last_max_lines = max;
-          last_until     = 0; 
-          last_show_ip   = 0;
           return 1;
         }
 
@@ -528,15 +531,21 @@ static int last_dcc_last(struct userrec *u, int idx, char *par)
           ++m;
         }
         for (; m < 14; m++) {
-          d[m] = '0';
+          switch (m) {
+            case 5:
+            case 7:        /* 20070000000000 is not a valid date, */
+              d[m] = '1';  /* make it 20070101000000 when filling with 0s */
+              break;
+            default:
+              d[m] = '0';
+              break;
+          }
         }
         d[14] = 0;
         /* ... and parse the given date */
         if ((last_until = last_parsetm(d)) == (time_t)-1) {
+          last_restore_defaults(max);
           dprintf(idx, usage);
-          last_max_lines = max;
-          last_until     = 0; 
-          last_show_ip   = 0;
           return 1;
         }
         break;
@@ -548,18 +557,14 @@ static int last_dcc_last(struct userrec *u, int idx, char *par)
       case 'n': /* -n NUM */
         p = newsplit(&par);
         if (p[0] == 0) {
+          last_restore_defaults(max);
           dprintf(idx, usage);
-          last_max_lines = max;
-          last_until     = 0;
-          last_show_ip   = 0;
           return 1;
         }
         for (t = p; t[0]; t++) {
           if (!isdigit((unsigned char)t[0])) {
+            last_restore_defaults(max);
             dprintf(idx, usage);
-            last_max_lines = max;
-            last_until     = 0;
-            last_show_ip   = 0;
             return 1;
           }
         }
@@ -579,10 +584,8 @@ static int last_dcc_last(struct userrec *u, int idx, char *par)
         p++;
         for (t = p; t[0]; t++) {
             if (!isdigit((unsigned char)t[0])) {
+              last_restore_defaults(max);
               dprintf(idx, usage);
-              last_max_lines = max;
-              last_until     = 0;
-              last_show_ip   = 0;
               return 1;
             }
         }
@@ -590,11 +593,9 @@ static int last_dcc_last(struct userrec *u, int idx, char *par)
         break;
 
       default: 
+        last_restore_defaults(max);
         dprintf(idx, "last: unknown option '%s'\n", p);
         dprintf(idx, usage);
-        last_max_lines = max;
-        last_until     = 0;
-        last_show_ip   = 0;
         return 1;
         break;
     }
@@ -606,9 +607,7 @@ static int last_dcc_last(struct userrec *u, int idx, char *par)
   search = p;
   ret = last_read_wtmp(idx, search);
 
-  last_max_lines = max;
-  last_until     = 0;
-  last_show_ip   = 0;
+  last_restore_defaults(max);
 
   return ret;
 }
