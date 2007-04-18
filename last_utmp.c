@@ -6,7 +6,9 @@
  * $Id$
  */
 
+#include <sys/types.h>
 #include <unistd.h>
+#include <sys/file.h>
 #include <stdio.h>
 
 #define UT_UNKNOWN            0
@@ -23,6 +25,12 @@
 #define UT_LINESIZE           12
 #define UT_NAMESIZE           32
 #define UT_HOSTSIZE           256
+
+struct exit_status {
+    short int e_termination;    /* process termination status */
+    short int e_exit;           /* process exit status */
+};
+
 
 struct utmp {
     short ut_type;              /* type of login */
@@ -47,43 +55,43 @@ struct utmp {
 #define ut_xtime ut_tv.tv_sec
 #define ut_addr ut_addr_v6[0]
 
-void uptdwtmp(const char *wtmp_file, const struct utmp *ut)
+void updwtmp(const char *wtmp_file, const struct utmp *ut)
 {
     int fd;
     int i;
-    off64_t offset;
+    off_t offset;
     int locked = 0;
 
-    fd = open(wtmp_file, O_WRONLY)
+    fd = open(wtmp_file, O_WRONLY);
     if (fd < 0)
         return;
+
     for (i = 0; i <= 3; i++) {
-        if (flock(fileno(fd), LOCK_WR|LOCK_NB) == 0) {
+        if (flock(fd, LOCK_EX|LOCK_NB) == 0) {
             locked = 1;
             break;
         }
         usleep(250); 
     }
     if (!locked) {
-        fclose(fd);
+        close(fd);
         return;    
     }
 
-    offset = seek(fd, 0, SEEK_END);
+    offset = lseek(fd, 0, SEEK_END);
     if (offset % sizeof(struct utmp) != 0) {
         offset -= offset % sizeof(struct utmp);
         ftruncate(fd, offset);
-        if (seek(fd, 0, SEEK_END) < 0)
+        if (lseek(fd, 0, SEEK_END) < 0)
             goto unlock_return;
     }
 
     if (write(fd, ut, sizeof(struct utmp)) != sizeof(struct utmp)) 
         ftruncate(fd, offset);
-    }
 
-    fflush(fd);
+    fsync(fd);
   unlock_return:
-    flock(fileno(fd), LOCK_UN);
-    fclose(fd);
+    flock(fd, LOCK_UN);
+    close(fd);
     return;
 }
