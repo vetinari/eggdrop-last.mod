@@ -1,0 +1,75 @@
+Description:
+------------
+
+Last.Mod records logins and logouts on your bot's party line. With the 
+'.last' command you can see who was on, from which remote host at which 
+time (and how long he/she was there).
+
+Installation:
+-------------
+
+Last.Mod will work with eggdrop1.6.x only. 
+
+The following instructions assume, ~/eggdrop1.6/ is the directory
+where you installed your eggdrop from. (of course, other source dirs
+will work as well)
+Unfortunately, you need to compile last.mod within your eggdrop source,
+so if you removed your original compile directory, you'll have to
+compile the whole bot again... sorry.
+
+(Note: replace X.Y.Z with your actual last.mod version number)
+Put last.mod.X.Y.Z.tar.gz in ~/eggdrop1.6/src/mod/,
+and unpack it (tar xfz last.mod.X.Y.Z.tar.gz). Change directory
+back to ~/eggdrop1.6/. Type 'make config'. Type 'make', wait until 
+compiling is done and use 'make install' to install the bot and last.mod.
+
+TCL vars:
+---------
+last-max-lines - set the number of lines to show if -n NUM/-NUM was not
+                 given
+                 Default: 20
+last-wtmp-file - set the file name where the records are saved. If used,
+                 this should be set before last.mod is loaded.
+                 Default: Eggdrop.last
+
+
+DCC commands:
+-------------
+.last [-n NUM|-NUM] [-t DATE] [-i] [--] [user|idx|host]
+ -n NUM, -NUM - show the last NUM lines instead of the default 
+ -i           - show IP instead of user@remote.example.net 
+ -t DATE      - show only logins up to this date. DATE is in the format
+                YYYYMMDDhhmmss, but may be shortened, all missing fields
+                will be set to the beginning of that period (i.e. 
+                200704     -> 20070401000000
+                2007       -> 20070101000000
+                2007040316 -> 20070403160000
+                ... ok, I think you get the idea)
+ --           - stop option parsing
+ [user|idx|host] - what to search for. user and host will accept wildcards.
+
+ ...example: '.last -n 5 Veti*' will show the last 5 logins of anyone 
+               matching 'Veti*'
+
+
+Other:
+------
+
+There is absolutely NO WARRANTY on this module. I do my best to make it
+work properly, but if anything gets screwed up, I'm not responsible. Use
+this module at your own risk.
+
+This mod hast been written on Linux amd64 (debian etch) and is known to 
+work on Linux x86 (debian sarge). If you have problems compiling and/or 
+running this on other systems... please help (see below), currently I 
+have no access to other OSs to test...
+[it's time to get the Octane running IRIX again and give this mod a 
+ try with Linux on it...]
+
+Feedback:
+---------
+
+Feel free to send feedback and bugreports, patches [*g*] to 
+last.mod@ankh-morp.org. In case of problems ALWAYS report the revision 
+number (found at top of file).
+
