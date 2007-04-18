@@ -57,8 +57,13 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#include <utmp.h>
 #include <stdlib.h>
+
+#ifdef __linux || defined __GNU__ /* GNU/Hurd */
+#  include <utmp.h>
+#else
+#  include "last_utmp.c"
+#endif
 
 #include "src/mod/module.h"
 #include "src/users.h"
