@@ -6,6 +6,10 @@
  * $Id$
  */
 
+/* IRIX 6.5 needs these two */
+#include <sys/stat.h>
+#include <fcntl.h>
+
 #include <sys/types.h>
 #include <unistd.h>
 #include <sys/file.h>

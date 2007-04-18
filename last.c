@@ -59,7 +59,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 
-#ifdef __linux || __GNU__ /* GNU/Hurd */
+#if defined(__linux) || defined(__GNU__) 
 #  include <utmp.h>
 #else
 #  include "last_utmp.c"

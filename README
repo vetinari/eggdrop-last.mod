@@ -60,11 +60,11 @@ work properly, but if anything gets screwed up, I'm not responsible. Use
 this module at your own risk.
 
 This mod hast been written on Linux amd64 (debian etch) and is known to 
-work on Linux x86 (debian sarge). If you have problems compiling and/or 
-running this on other systems... please help (see below), currently I 
-have no access to other OSs to test...
-[it's time to get the Octane running IRIX again and give this mod a 
- try with Linux on it...]
+work on Linux x86 (debian sarge), Linux mips (debian etch) and IRIX 
+(uname -a: IRIX64 binky 6.5 01080747 IP30 mips, with gcc 3.2.2).
+
+If you have problems compiling and/or running this on other systems... 
+please help (see below), currently I have no access to other OSs to test...
 
 Feedback:
 ---------
@@ -72,4 +72,8 @@ Feedback:
 Feel free to send feedback and bugreports, patches [*g*] to 
 last.mod@ankh-morp.org. In case of problems ALWAYS report the revision 
 number (found at top of file).
+
+Thanks:
+-------
+ - Ganda|f for build testing on FreeBSD 5.3
 
