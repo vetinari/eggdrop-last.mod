@@ -43,8 +43,8 @@ struct utmp {
                                    marked as DEAD_PROCESS. */
     long ut_session;            /* session ID, used for windowing*/
     struct timeval ut_tv;       /* time entry was made.  */
-    int32_t ut_addr_v6[4];      /* IP address of remote host.  */
-    char __unused[20];          /* Reserved for future use.  */
+    int32_t  ut_addr_v6[4];      /* IP address of remote host.  */
+    // char __unused[20];          /* Reserved for future use.  */
 };
 
 /* Backwards compatibility hacks.  */
