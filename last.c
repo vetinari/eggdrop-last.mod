@@ -706,7 +706,6 @@ static Function last_table[] = {
 char *last_start(Function *egg_func_table)
 {
   global = egg_func_table;
-  char modvers[UT_HOSTSIZE+1];
   module_register(MODULE_NAME, last_table, 
                   LAST_MOD_MAJOR_VERSION, LAST_MOD_MINOR_VERSION
                  );
@@ -732,12 +731,11 @@ char *last_start(Function *egg_func_table)
   strcpy(entry.ut_line,  "~");
   strcpy(entry.ut_id,    "~~");
   strcpy(entry.ut_user,  "modload");
-  snprintf(modvers, UT_HOSTSIZE, "%s.mod %d.%d", 
+  snprintf(entry.ut_host, UT_HOSTSIZE, "%s.mod %d.%d", 
                                  MODULE_NAME, 
                                  LAST_MOD_MAJOR_VERSION, 
                                  LAST_MOD_MINOR_VERSION
           );
-  strncpy(entry.ut_host, modvers, UT_HOSTSIZE);
   updwtmp((const char *)last_wtmp_file, &entry);
   return NULL;
 }
