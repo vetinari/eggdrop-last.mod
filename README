@@ -59,9 +59,10 @@ There is absolutely NO WARRANTY on this module. I do my best to make it
 work properly, but if anything gets screwed up, I'm not responsible. Use
 this module at your own risk.
 
-This mod hast been written on Linux amd64 (debian etch) and is known to 
-work on Linux x86 (debian sarge), Linux mips (debian etch) and IRIX 
-(uname -a: IRIX64 binky 6.5 01080747 IP30 mips, with gcc 3.2.2).
+This mod hast been written on Linux amd64 (debian etch, lenny) and is 
+known to work on Linux x86 (debian sarge, etch, lenny), Linux mips 
+(debian etch) and IRIX (uname -a: IRIX64 binky 6.5 01080747 IP30 mips, 
+with gcc 3.2.2).
 
 If you have problems compiling and/or running this on other systems... 
 please help (see below), currently I have no access to other OSs to test...
