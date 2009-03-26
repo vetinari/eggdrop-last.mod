@@ -9,7 +9,7 @@
 ###  %blast module%b
    This module provides a last command via dcc. 
 
-   The following commands are provided by the seen module:
+   The following commands are provided by the last module:
 
    For all users:
       %blast%b
