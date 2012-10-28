@@ -359,7 +359,7 @@ int last_read_wtmp(int idx, char *search)
         down = 1;
         break;
       case BOOT_TIME:
-        strcpy(ut.ut_line, "system boot");
+        strcpy(ut.ut_line, "mod loading");
         quit |= last_display(idx, &ut, lastdown, R_REBOOT, search);
         lastdown = ut.ut_time;
         down = 1;
