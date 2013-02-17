@@ -37,7 +37,7 @@
 
 #define MODULE_NAME "last"
 #define LAST_MOD_MAJOR_VERSION 0
-#define LAST_MOD_MINOR_VERSION 5
+#define LAST_MOD_MINOR_VERSION 6
 #define MAKING_LAST
 
 #ifdef TIME_WITH_SYS_TIME
@@ -181,7 +181,7 @@ int last_uread(FILE *fp, struct utmp *u, int *quit)
 
 int last_display(int idx, struct utmp *p, time_t t, int what, char *search)
 {
-  time_t      secs, tmp;
+  time_t      secs, tmp, cur_time;
   char        logintime[32];
   char        logouttime[32];
   char        length[32];
@@ -190,6 +190,7 @@ int last_display(int idx, struct utmp *p, time_t t, int what, char *search)
   char        domain[256];
   char        *s;
   int         my_mins, my_hours, my_days;
+  const struct tm *tm;
  
   utline[0] = 0;
   strncat(utline, p->ut_line, UT_LINESIZE);
@@ -208,11 +209,27 @@ int last_display(int idx, struct utmp *p, time_t t, int what, char *search)
   /*
    *  Calculate times
    */
+  cur_time = time(NULL);
+  secs = cur_time - p->ut_time; 
   tmp = (time_t)p->ut_time;
-  strcpy(logintime, ctime(&tmp));
+  if (secs < 365 * 24 * 60 * 60)
+    strcpy(logintime, ctime(&tmp));
+  else {
+    tm = localtime(&tmp);
+    strftime(logintime, 17, "%Y-%m-%d %H:%M", tm);
+  }
   logintime[16] = 0;
-  sprintf(logouttime, "- %s", ctime(&t) + 11);
-  logouttime[7] = 0;
+
+  tmp = (time_t)t;
+  secs = cur_time - t;
+  if (secs < 365 * 24 * 60 * 60)
+    strcpy(logouttime, ctime(&tmp));
+  else {
+    tm = localtime(&tmp);
+    strftime(logouttime, 17, "%Y-%m-%d %H:%M", tm);
+  }
+  logouttime[16] = 0;
+
   secs = t - p->ut_time;
   my_mins  = (secs / 60) % 60;
   my_hours = (secs / 3600) % 24;
@@ -224,19 +241,19 @@ int last_display(int idx, struct utmp *p, time_t t, int what, char *search)
 
   switch (what) {
       case R_CRASH:
-          sprintf(logouttime, "- crash");
+          sprintf(logouttime, "--> crash");
           break;
       case R_DOWN:
-          sprintf(logouttime, "- down ");
+          sprintf(logouttime, "--> down");
           break;
       case R_NOW:
           length[0] = 0;
-          sprintf(logouttime, "  still");
+          sprintf(logouttime, "           still");
           sprintf(length, "logged in");
           break;
       case R_PHANTOM:
           length[0] = 0;
-          sprintf(logouttime, "   gone");
+          sprintf(logouttime, "            gone");
           sprintf(length, "- no logout");
           break;
       case R_REBOOT:
@@ -257,7 +274,7 @@ int last_display(int idx, struct utmp *p, time_t t, int what, char *search)
     strncpy(domain, p->ut_host, UT_HOSTSIZE); 
 
   snprintf(final, sizeof(final),
-              "%-9.9s %-12.12s %-16.16s %-7.7s %-12.12s %s",
+              "%-9.9s %-12.12s %-16.16s %-16.16s %-12.12s %s",
               p->ut_name, /* truncated at def NICKLEN of 9 */ 
               utline, 
               logintime, 
@@ -311,7 +328,7 @@ int last_read_wtmp(int idx, char *search)
   }
 
   dprintf(idx, 
-          "HANDLE    IDX          WHEN                                  HOST\n"
+          "HANDLE    IDX          WHEN                                           HOST\n"
          ); 
 
   if (last_uread(fp, &ut, NULL) == 1) 

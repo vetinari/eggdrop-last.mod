@@ -60,7 +60,7 @@ work properly, but if anything gets screwed up, I'm not responsible. Use
 this module at your own risk.
 
 This mod hast been written on Linux amd64 (debian etch, lenny) and is 
-known to work on Linux x86 (debian sarge, etch, lenny), Linux mips 
+known to work on Linux x86 (debian sarge, etch, lenny, squeeze), Linux mips 
 (debian etch) and IRIX (uname -a: IRIX64 binky 6.5 01080747 IP30 mips, 
 with gcc 3.2.2).
 
